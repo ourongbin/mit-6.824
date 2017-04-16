@@ -2,7 +2,6 @@ package mapreduce
 
 import (
 	"fmt"
-	"log"
 	"sync"
 )
 
@@ -38,21 +37,20 @@ func schedule(jobName string, mapFiles []string, nReduce int, phase jobPhase, re
 	wg.Add(ntasks)
 	for i := 0; i < ntasks; i++ {
 		go func(i int) {
-			w := <-registerChan
-			var f string
-			if phase == mapPhase {
-				debug("indexdbg %d\n", i)
-				fmt.Printf("indexfmt %d\n", i)
-				log.Printf("indexlog %d\n", i)
-				f = mapFiles[i]
-			} else {
-				f = ""
+			for {
+				w := <-registerChan
+				var f string
+				if phase == mapPhase {
+					f = mapFiles[i]
+				} else {
+					f = ""
+				}
+				if call(w, "Worker.DoTask", &DoTaskArgs{jobName, f, phase, i, n_other}, nil) {
+					wg.Done()
+					registerChan <- w
+					break
+				}
 			}
-			if !call(w, "Worker.DoTask", &DoTaskArgs{jobName, f, phase, i, n_other}, nil) {
-				log.Fatal("Worker.DoTask failed:", phase, i)
-			}
-			wg.Done()
-			registerChan <- w
 		}(i)
 	}
 	wg.Wait()
